@@ -1,3 +1,27 @@
+// ====== ADD THIS AT VERY TOP OF server.js ======
+const http = require('http');
+const WebSocket = require('ws');
+
+// 强制处理 WebSocket Upgrade 头（Render 必需）
+const originalCreateServer = http.createServer;
+http.createServer = function (...args) {
+  const server = originalCreateServer(...args);
+  server.on('upgrade', (req, socket, head) => {
+    // 允许所有来源（开发环境），生产环境可加域名白名单
+    if (req.headers['sec-websocket-key']) {
+      socket.write('HTTP/1.1 101 Switching Protocols\r\n' +
+        'Upgrade: websocket\r\n' +
+        'Connection: Upgrade\r\n' +
+        `Sec-WebSocket-Accept: ${require('crypto')
+          .createHash('sha1')
+          .update(req.headers['sec-websocket-key'] + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11')
+          .digest('base64')}\r\n\r\n`);
+    }
+  });
+  return server;
+};
+// ==============================================
+
 // server.js - 拱猪游戏服务器 (Node.js)
 // 依赖: npm install ws
 const WebSocket = require('ws');
@@ -15,7 +39,10 @@ const server = http.createServer((req, res) => {
 });
 
 // WebSocket服务器
-const wss = new WebSocket.Server({ server });
+const wss = new WebSocket.Server({ 
+  server,
+  path: '/ws' // ← 显式声明路径，避免 Render 路由冲突
+});
 const rooms = {}; // { roomId: { players: [], gameState: {...} } }
 
 // 特殊牌定义
