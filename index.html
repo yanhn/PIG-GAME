@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>拱猪 · 极简联机版</title>
+  <style>
+    :root { --primary: #3b82f6; --danger: #ef4444; --success: #10b981; --gray: #6b7280; --bg: #f8fafc; }
+    * { margin:0; padding:0; box-sizing:border-box; font-family:"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; }
+    body { background:var(--bg); color:#1e293b; padding:12px; max-width:1200px; margin:auto; line-height:1.5; }
+    .header { text-align:center; margin:16px 0; padding:12px; border-radius:12px; background:white; box-shadow:0 2px 10px rgba(0,0,0,0.08); }
+    .header h1 { font-size:1.8rem; margin:8px 0; color:var(--primary); display:flex; justify-content:center; gap:8px; }
+    .room-bar { background:white; border-radius:12px; padding:14px; box-shadow:0 2px 8px rgba(0,0,0,0.1); display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between; margin:16px 0; }
+    .players-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px,1fr)); gap:16px; margin:16px 0; }
+    .player-card { background:white; border-radius:12px; padding:16px; box-shadow:0 2px 6px rgba(0,0,0,0.08); text-align:center; transition:all 0.2s; min-height:90px; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+    .player-name { font-weight:600; margin:4px 0; font-size:1.1rem; }
+    .player-score { font-size:1.4rem; font-weight:700; margin-top:4px; }
+    .player-score.negative { color:var(--danger); }
+    .player-score.positive { color:var(--success); }
+    .current-turn { border:2px solid var(--primary); box-shadow:0 0 0 4px rgba(59,130,246,0.15); transform:scale(1.03); }
+    .table-area { background:white; border-radius:16px; padding:20px; box-shadow:0 4px 12px rgba(0,0,0,0.1); margin:16px 0; position:relative; min-height:150px; }
+    .table-header { display:flex; justify-content:space-between; margin-bottom:12px; font-weight:500; }
+    .trick-cards { display:flex; justify-content:center; gap:25px; margin-top:15px; position:relative; height:100px; }
+    .card-pos { position:absolute; top:0; left:0; width:100%; height:100%; display:flex; justify-content:center; align-items:center; }
+    .card-pos.top { top:10px; }
+    .card-pos.right { right:10px; transform:rotate(90deg); }
+    .card-pos.bottom { bottom:10px; }
+    .card-pos.left { left:10px; transform:rotate(-90deg); }
+    .card { width:55px; height:85px; border-radius:8px; background:white; border:1px solid #e2e8f0; display:flex; align-items:center; justify-content:center; font-weight:600; font-size:0.8rem; box-shadow:1px 2px 4px rgba(0,0,0,0.1); position:relative; user-select:none; }
+    .card.heart { color:#ef4444; border-color:#fecaca; }
+    .card.spade { color:#1e293b; }
+    .card.diamond { color:#f59e0b; }
+    .card.club { color:#0d9488; }
+    .card.special { box-shadow:0 0 0 2px gold; }
+    .hand-area { background:white; border-radius:16px; padding:16px; box-shadow:0 4px 12px rgba(0,0,0,0.1); margin:16px 0; }
+    .hand-title { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; padding-bottom:8px; border-bottom:1px solid #f1f5f9; }
+    .cards-container { display:flex; flex-wrap:wrap; gap:6px; min-height:110px; justify-content:center; align-items:center; padding:4px; }
+    .card.self { cursor:pointer; transform:scale(1.12); z-index:20; box-shadow:0 0 0 2px var(--primary); }
+    .card.self:hover { transform:scale(1.18); box-shadow:0 0 0 3px #60a5fa; }
+    .card.played { opacity:0.5; cursor:not-allowed; transform:scale(0.95); }
+    .chat-area { background:white; border-radius:12px; padding:16px; box-shadow:0 2px 8px rgba(0,0,0,0.1); margin-top:16px; }
+    .chat-messages { height:110px; overflow-y:auto; border-bottom:1px solid #f1f5f9; padding-bottom:8px; margin-bottom:10px; font-size:0.95rem; line-height:1.6; }
+    .chat-msg { padding:4px 0; border-bottom:1px dashed #f1f5f9; }
+    .chat-system { color:var(--gray); font-style:italic; }
+    .chat-input { display:flex; gap:8px; }
+    .chat-input input { flex:1; padding:10px 14px; border:1px solid #ddd; border-radius:8px; font-size:0.95rem; }
+    .btn { background:var(--primary); color:white; border:none; border-radius:8px; padding:10px 18px; font-weight:600; cursor:pointer; transition:all 0.2s; white-space:nowrap; }
+    .btn:hover { opacity:0.95; transform:translateY(-1px); }
+    .btn:disabled { background:#9ca3af; cursor:not-allowed; transform:none; opacity:1; }
+    .room-id { background:#dbeafe; color:var(--primary); font-weight:700; padding:4px 10px; border-radius:6px; letter-spacing:1.5px; font-size:1.1rem; }
+    .status-bar { background:#fffbeb; color:#92400e; padding:10px; border-radius:8px; margin:16px 0; text-align:center; font-weight:500; border-left:3px solid #f59e0b; display:none; }
+    .rules-btn { background:#f1f5f9; color:var(--gray); margin-left:10px; padding:6px 12px; }
+    .modal { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:1000; justify-content:center; align-items:center; }
+    .modal-content { background:white; border-radius:16px; width:90%; max-width:600px; max-height:80%; overflow:auto; padding:24px; box-shadow:0 10px 25px rgba(0,0,0,0.2); }
+    .close-modal { float:right; font-size:1.5rem; cursor:pointer; color:var(--gray); }
+    @media (max-width:768px) {
+      .players-grid { grid-template-columns:repeat(2,1fr); }
+      .card { width:42px; height:65px; font-size:0.65rem; }
+      .trick-cards { gap:10px; }
+      .room-bar { flex-direction:column; align-items:stretch; }
+      .header h1 { font-size:1.5rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>🐷 拱猪 · 好友房联机版</h1>
+    <p>4人对战｜房间码邀请｜极简规则｜匿名游玩</p>
+    <button class="btn rules-btn" onclick="document.getElementById('rulesModal').style.display='flex'">📜 规则速查</button>
+  </div>
+  
+  <div class="room-bar">
+    <div><strong>房间:</strong> <span id="roomId" class="room-id">----</span></div>
+    <div><strong>状态:</strong> <span id="gameStatus">等待创建房间...</span></div>
+    <div>
+      <button id="createRoomBtn" class="btn">✨ 创建房间</button>
+      <button id="joinRoomBtn" class="btn" style="background:#8b5cf6; margin-left:8px;" onclick="joinRoomPrompt()">🚪 加入房间</button>
+    </div>
+  </div>
+
+  <div class="players-grid">
+    <div class="player-card" id="player0"><div class="player-name">-</div><div class="player-score">0</div></div>
+    <div class="player-card" id="player1"><div class="player-name">-</div><div class="player-score">0</div></div>
+    <div class="player-card" id="player2"><div class="player-name">-</div><div class="player-score">0</div></div>
+    <div class="player-card" id="player3"><div class="player-name">-</div><div class="player-score">0</div></div>
+  </div>
+
+  <div class="table-area">
+    <div class="table-header">
+      <div>当前轮次: <span id="trickCount">0</span>/13</div>
+      <div>出牌花色: <span id="leadSuit" style="color:var(--primary); font-weight:600">-</span></div>
+      <div>本轮分数: <span id="trickPoints">0</span></div>
+    </div>
+    <div class="trick-cards" id="trickCards">
+      <div class="card-pos top" id="cardPos0"></div>
+      <div class="card-pos right" id="cardPos1"></div>
+      <div class="card-pos bottom" id="cardPos2"></div>
+      <div class="card-pos left" id="cardPos3"></div>
+    </div>
+  </div>
+
+  <div class="hand-area">
+    <div class="hand-title">
+      <div>我的手牌 (<span id="handCount">0</span> 张)</div>
+      <div id="turnHint" style="color:var(--primary); font-weight:600;"></div>
+    </div>
+    <div class="cards-container" id="handCards"></div>
+  </div>
+
+  <div class="chat-area">
+    <div class="chat-messages" id="chatMessages"></div>
+    <div class="chat-input">
+      <input type="text" id="chatInput" placeholder="输入消息（回车发送）" maxlength="50">
+      <button id="sendChatBtn" class="btn" style="padding:10px 16px;">💬</button>
+    </div>
+  </div>
+
+  <div class="status-bar" id="statusBar"></div>
+
+  <!-- 规则说明弹窗 -->
+  <div class="modal" id="rulesModal">
+    <div class="modal-content">
+      <span class="close-modal" onclick="document.getElementById('rulesModal').style.display='none'">&times;</span>
+      <h2 style="margin:10px 0; color:var(--primary);">🐷 拱猪规则速查</h2>
+      <ul style="line-height:1.8; padding-left:20px; margin:15px 0;">
+        <li><strong>出牌</strong>：每轮由领出者定花色，其他人必须跟出同花色（无则可垫牌）</li>
+        <li><strong>收牌</strong>：同花色中点数最大者（A>K>Q>J>10>...>2）收走本墩所有牌</li>
+        <li><strong>计分牌</strong>：
+          <ul style="margin-top:8px; padding-left:20px;">
+            <li>♥2-10：每张-10分｜♥J：-20｜♥Q：-30｜♥K：-40｜♥A：-50</li>
+            <li>♠Q：-100｜♦J：+100｜♣10：翻倍器（使持有者本局总分×2）</li>
+          </ul>
+        </li>
+        <li><strong>特殊奖励</strong>（互斥，取最高）：
+          <ul style="margin-top:8px; padding-left:20px;">
+            <li>收齐全部16张特殊牌：+500分</li>
+            <li>仅收♦J+♠Q（无其他特殊牌）：+200分</li>
+            <li>仅收♣10（无其他特殊牌）：+50分</li>
+          </ul>
+        </li>
+        <li><strong>胜负</strong>：任一玩家总分 ≤ -1500 分时游戏结束</li>
+      </ul>
+      <p style="margin-top:15px; padding-top:10px; border-top:1px dashed #ddd; font-weight:500;">
+        💡 提示：♣10会使你本局所有分数翻倍（含正负分）！策略性保留/甩出是关键
+      </p>
+    </div>
+  </div>
+
+  <script>
+    // ====================== 配置区 ======================
+    // 部署后替换为您的WebSocket服务器地址（示例使用免费测试服务器）
+    const WS_URL = "wss://gongzhu-server.onrender.com"; // 实际部署时替换！
+    // ====================================================
+
+    let ws = null;
+    let roomId = null;
+    let playerId = null;
+    let playerName = null;
+    let isMyTurn = false;
+    const suitMap = { 'H': '♥', 'S': '♠', 'D': '♦', 'C': '♣' };
+    const rankMap = { 'A':14, 'K':13, 'Q':12, 'J':11, '10':10, '9':9, '8':8, '7':7, '6':6, '5':5, '4':4, '3':3, '2':2 };
+    
+    // 初始化
+    document.getElementById('createRoomBtn').onclick = createRoom;
+    document.getElementById('sendChatBtn').onclick = sendChat;
+    document.getElementById('chatInput').onkeypress = (e) => { if(e.key==='Enter') sendChat(); };
+    
+    // 创建房间
+    function createRoom() {
+      if(ws && ws.readyState === WebSocket.OPEN) {
+        alert('已在房间中！如需新房间请刷新页面');
+        return;
+      }
+      roomId = Math.floor(100000 + Math.random()*900000).toString();
+      connectToServer();
+    }
+    
+    // 加入房间
+    function joinRoomPrompt() {
+      const code = prompt('请输入6位房间码：');
+      if(code && /^\d{6}$/.test(code)) {
+        roomId = code;
+        connectToServer();
+      } else if(code) {
+        alert('房间码必须是6位数字！');
+      }
+    }
+    
+    // 连接服务器
+    function connectToServer() {
+      if(ws) ws.close();
+      document.getElementById('roomId').textContent = roomId;
+      document.getElementById('gameStatus').textContent = '连接中...';
+      
+      // 生成临时昵称
+      const nicknames = ['拱猪侠','甩牌王','♣10猎人','♥收集者','♠Q恐惧症','翻倍大师','冷静分析者','手气王'];
+      playerName = nicknames[Math.floor(Math.random()*nicknames.length)] + '#' + Math.floor(1000+Math.random()*9000);
+      
+      try {
+        ws = new WebSocket(`${WS_URL}?room=${roomId}&name=${encodeURIComponent(playerName)}`);
+        
+        ws.onopen = () => {
+          addChatMsg(`✅ 已连接到服务器`, 'system');
+          document.getElementById('gameStatus').textContent = '等待其他玩家...';
+        };
+        
+        ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            handleServerMessage(data);
+          } catch(e) {
+            console.error('解析消息失败:', e);
+          }
+        };
+        
+        ws.onclose = () => {
+          setTimeout(() => {
+            if(!ws || ws.readyState !== WebSocket.OPEN) {
+              document.getElementById('gameStatus').textContent = '连接断开，可刷新重试';
+              addChatMsg('⚠️ 与服务器连接断开', 'system');
+            }
+          }, 1000);
+        };
+        
+        ws.onerror = (err) => {
+          console.error('WebSocket错误:', err);
+          addChatMsg('❌ 连接服务器失败，请检查网络或稍后重试', 'system');
+        };
+      } catch(e) {
+        console.error('连接失败:', e);
+        addChatMsg(`❌ 连接错误: ${e.message}`, 'system');
+      }
+    }
+    
+    // 处理服务器消息
+    function handleServerMessage(msg) {
+      switch(msg.type) {
+        case 'room_joined':
+          document.getElementById('gameStatus').textContent = `已加入房间（${msg.playerCount}/4）`;
+          updatePlayerNames(msg.players);
+          if(msg.isHost) document.getElementById('createRoomBtn').disabled = true;
+          addChatMsg(`${msg.name} 加入了房间`, 'system');
+          break;
+          
+        case 'game_start':
+          document.getElementById('gameStatus').textContent = '游戏开始！发牌中...';
+          renderHandCards(msg.hand);
+          document.getElementById('trickCount').textContent = '0';
+          document.getElementById('leadSuit').textContent = '-';
+          document.getElementById('trickPoints').textContent = '0';
+          clearTrickCards();
+          addChatMsg('🃏 游戏开始！请等待出牌...', 'system');
+          break;
+          
+        case 'your_turn':
+          isMyTurn = true;
+          document.getElementById('turnHint').textContent = '👉 轮到你出牌！';
+          document.getElementById('gameStatus').textContent = '你的回合';
+          enableHandCards(msg.leadSuit || null);
+          break;
+          
+        case 'card_played':
+          // 更新出牌区
+          const pos = msg.position;
+          const cardEl = createCardElement(msg.card);
+          document.getElementById(`cardPos${pos}`).innerHTML = '';
+          document.getElementById(`cardPos${pos}`).appendChild(cardEl);
+          
+          // 更新状态
+          if(msg.leadSuit) {
+            document.getElementById('leadSuit').textContent = suitMap[msg.leadSuit] || msg.leadSuit;
+          }
+          if(msg.trickPoints !== undefined) {
+            document.getElementById('trickPoints').textContent = msg.trickPoints;
+          }
+          
+          // 禁用手牌（非自己回合）
+          if(msg.playerId !== playerId) disableHandCards();
+          addChatMsg(`${msg.name} 出了 ${formatCard(msg.card)}`, 'system');
+          break;
+          
+        case 'trick_end':
+          document.getElementById('trickCount').textContent = msg.trickNumber;
+          // 重置出牌区（短暂显示后清空）
+          setTimeout(clearTrickCards, 1500);
+          addChatMsg(`✅ ${msg.winnerName} 收走本墩牌（含${msg.points}分）`, 'system');
+          break;
+          
+        case 'round_end':
+          updateScores(msg.scores);
+          document.getElementById('gameStatus').textContent = '本局结束，准备下一局...';
+          addChatMsg(`🎉 本局结束！分数已更新`, 'system');
+          // 检查游戏结束
+          if(msg.gameOver) {
+            setTimeout(() => {
+              alert(`🏆 游戏结束！\n${msg.winner} 获胜！\n\n最终分数：\n${msg.scores.map(s=>`${s.name}: ${s.total}`).join('\n')}`);
+              document.getElementById('gameStatus').textContent = '游戏已结束';
+            }, 1000);
+          }
+          break;
+          
+        case 'chat':
+          addChatMsg(`${msg.name}: ${msg.text}`, 'user');
+          break;
+          
+        case 'error':
+          addChatMsg(`❌ ${msg.message}`, 'system');
+          break;
+      }
+    }
+    
+    // 渲染手牌
+    function renderHandCards(cards) {
+      const container = document.getElementById('handCards');
+      container.innerHTML = '';
+      cards.forEach(card => {
+        const el = createCardElement(card, true);
+        el.onclick = () => playCard(card);
+        container.appendChild(el);
+      });
+      document.getElementById('handCount').textContent = cards.length;
+    }
+    
+    // 创建卡牌元素
+    function createCardElement(cardStr, isSelf=false) {
+      const el = document.createElement('div');
+      el.className = `card ${getSuitClass(cardStr)}`;
+      if(isSelf) el.classList.add('self');
+      if(['SQ','DJ','C10'].includes(cardStr) || cardStr.startsWith('H')) el.classList.add('special');
+      
+      const suit = suitMap[cardStr[0]] || cardStr[0];
+      const rank = cardStr.slice(1);
+      el.innerHTML = `<div>${suit}</div><div style="font-size:0.7em;margin-top:-2px">${rank}</div>`;
+      return el;
+    }
+    
+    // 获取花色CSS类
+    function getSuitClass(card) {
+      const s = card[0];
+      return s === 'H' ? 'heart' : s === 'S' ? 'spade' : s === 'D' ? 'diamond' : 'club';
+    }
+    
+    // 格式化卡牌显示
+    function formatCard(card) {
+      return `${suitMap[card[0]] || card[0]}${card.slice(1)}`;
+    }
+    
+    // 出牌
+    function playCard(card) {
+      if(!isMyTurn || !ws || ws.readyState !== WebSocket.OPEN) return;
+      
+      ws.send(JSON.stringify({ type: 'play_card', card }));
+      isMyTurn = false;
+      document.getElementById('turnHint').textContent = '';
+      disableHandCards();
+    }
+    
+    // 启用手牌（仅可出的牌）
+    function enableHandCards(leadSuit) {
+      const cards = document.querySelectorAll('.card.self');
+      cards.forEach(card => {
+        const cardStr = card.dataset.card; // 实际需从数据绑定，此处简化
+        // 简化：所有牌可点（后端校验），仅视觉提示
+        card.style.opacity = '1';
+        card.style.cursor = 'pointer';
+      });
+    }
+    
+    // 禁用手牌
+    function disableHandCards() {
+      const cards = document.querySelectorAll('.card.self');
+      cards.forEach(card => {
+        card.style.opacity = '0.6';
+        card.style.cursor = 'not-allowed';
+      });
+    }
+    
+    // 清空出牌区
+    function clearTrickCards() {
+      document.querySelectorAll('.card-pos').forEach(el => el.innerHTML = '');
+      document.getElementById('leadSuit').textContent = '-';
+      document.getElementById('trickPoints').textContent = '0';
+    }
+    
+    // 更新玩家信息
+    function updatePlayerNames(players) {
+      players.forEach((p, i) => {
+        if(document.getElementById(`player${i}`)) {
+          document.querySelector(`#player${i} .player-name`).textContent = p.name || `玩家${i+1}`;
+          document.querySelector(`#player${i} .player-score`).textContent = p.score || '0';
+          document.querySelector(`#player${i} .player-score`).className = 'player-score ' + 
+            (p.score < 0 ? 'negative' : p.score > 0 ? 'positive' : '');
+          if(p.isCurrentTurn) {
+            document.getElementById(`player${i}`).classList.add('current-turn');
+          } else {
+            document.getElementById(`player${i}`).classList.remove('current-turn');
+          }
+        }
+      });
+    }
+    
+    // 更新分数
+    function updateScores(scores) {
+      scores.forEach((s, i) => {
+        const el = document.querySelector(`#player${i} .player-score`);
+        if(el) {
+          el.textContent = s.total;
+          el.className = 'player-score ' + (s.total < 0 ? 'negative' : s.total > 0 ? 'positive' : '');
+        }
+      });
+    }
+    
+    // 聊天
+    function sendChat() {
+      const input = document.getElementById('chatInput');
+      const text = input.value.trim();
+      if(text && ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'chat', text }));
+        input.value = '';
+      }
+    }
+    
+    function addChatMsg(text, type) {
+      const chatBox = document.getElementById('chatMessages');
+      const msg = document.createElement('div');
+      msg.className = `chat-msg ${type === 'system' ? 'chat-system' : ''}`;
+      msg.textContent = `[${new Date().toLocaleTimeString('zh-CN', {hour12:false, hour:'2-digit', minute:'2-digit'})}] ${text}`;
+      chatBox.appendChild(msg);
+      chatBox.scrollTop = chatBox.scrollHeight;
+      
+      // 系统消息状态栏提示
+      if(type === 'system' && !text.startsWith('[')) {
+        const bar = document.getElementById('statusBar');
+        bar.textContent = text;
+        bar.style.display = 'block';
+        setTimeout(() => { bar.style.display = 'none'; }, 5000);
+      }
+    }
+    
+    // 页面加载提示
+    window.onload = () => {
+      if(location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+        document.getElementById('statusBar').innerHTML = '💡 <strong>开发提示</strong>：本地测试模式，连接地址需替换为您的服务器地址（见代码第18行）';
+        document.getElementById('statusBar').style.display = 'block';
+        document.getElementById('statusBar').style.background = '#dbeafe';
+        document.getElementById('statusBar').style.color = '#1e40af';
+      }
+    };
+    
+    // 离开页面提示
+    window.onbeforeunload = () => {
+      if(ws && ws.readyState === WebSocket.OPEN) {
+        return '离开页面将断开游戏连接，确认离开？';
+      }
+    };
+  </script>
+</body>
+</html>
